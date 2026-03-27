@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+REPO_NAME="spring3hibernate"
+ARTIFACT_DIR="/var/lib/jenkins/artifacts/$REPO_NAME"
+REPORT_DIR="$WORKSPACE/reports"
+VENV_DIR="$WORKSPACE/venv"
+
+mkdir -p "$REPORT_DIR" "$ARTIFACT_DIR"
+
+
+echo "Credential Scan (with Python venv)"
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+pip install trufflehog
+trufflehog filesystem . > "$REPORT_DIR/credential_scan.txt" || echo "Credential scan failed"
+deactivate
+
+
+echo "OWASP Dependency Check"
+mvn org.owasp:dependency-check-maven:check || echo "Dependency check failed"
+cp -r target/dependency-check-report.html "$REPORT_DIR/" || echo "Dependency report not found"
+
+
+echo " Running Unit Tests"
+mvn test || echo "Tests failed"
+
+echo " Code Coverage (Cobetura)"
+mvn cobertura:cobertura || echo "Coverage failed"
+cp -r target/site/cobertura "$REPORT_DIR/cobertura" || echo "Coverage report not found"
+
+echo " Storing Reports"
+cp -r "$REPORT_DIR"/* "$ARTIFACT_DIR/"

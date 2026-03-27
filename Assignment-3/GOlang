@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+REPO_NAME="employee-api"
+ARTIFACT_DIR="/var/lib/jenkins/artifacts/$REPO_NAME"
+REPORT_DIR="$WORKSPACE/reports"
+mkdir -p "$REPORT_DIR" "$ARTIFACT_DIR"
+
+echo " Credential Scan (TruffleHog CLI)"
+TRUFFLEHOG_BIN="$WORKSPACE/trufflehog"
+
+if [ ! -f "$TRUFFLEHOG_BIN" ]; then
+    echo "Installing TruffleHog..."
+    curl -sLo "$TRUFFLEHOG_BIN" https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog-linux-amd64
+    chmod +x "$TRUFFLEHOG_BIN"
+fi
+
+"$TRUFFLEHOG_BIN" filesystem . > "$REPORT_DIR/credential_scan.txt" || echo "Credential scan failed"
+
+echo " Dependency and Security Scan"
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+"$HOME/go/bin/gosec" ./... > "$REPORT_DIR/gosec_report.txt" || echo "Gosec scan failed"
+
+echo " Running Unit Tests and Coverage"
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out > "$REPORT_DIR/coverage.txt"
+go tool cover -html=coverage.out -o "$REPORT_DIR/coverage.html"
+
+echo " Storing Reports"
+cp -r "$REPORT_DIR"/* "$ARTIFACT_DIR/"

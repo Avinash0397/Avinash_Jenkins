@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+
+REPO_NAME="attendance-api"
+ARTIFACT_DIR="/var/lib/jenkins/artifacts/$REPO_NAME"
+REPORT_DIR="$WORKSPACE/reports"
+VENV_DIR="$WORKSPACE/venv"
+
+
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+
+mkdir -p "$REPORT_DIR" "$ARTIFACT_DIR"
+
+echo " Installing tools in venv..."
+pip install --upgrade pip
+pip install trufflehog safety coverage
+
+echo " Credential Scan"
+trufflehog filesystem . > "$REPORT_DIR/credential_scan.txt" || echo "Credential scan failed"
+
+
+if [ -f "requirements.txt" ]; 
+then
+    echo " Dependency Scan"
+    safety check -r requirements.txt > "$REPORT_DIR/dependency_check.txt" || echo "Dependency issues found"
+
+    echo " Installing project dependencies"
+    pip install -r requirements.txt || echo "Requirements installation failed"
+else
+    echo "Skipping dependency scan and pip install — requirements.txt not found"
+fi
+
+
+if [ -d "tests" ]; 
+then
+    echo " Discovering unit tests in 'tests/' directory"
+    python -m unittest discover -s tests -p "test_*.py" -v > "$REPORT_DIR/unittest_output.txt" || echo "Unit tests failed or none found"
+
+    echo " Running coverage analysis"
+    coverage run -m unittest discover -s tests -p "test_*.py" || echo "No tests collected for coverage"
+    coverage report > "$REPORT_DIR/coverage.txt" || echo "Coverage report failed"
+    coverage html -d "$REPORT_DIR/htmlcov" || echo "Coverage HTML generation failed"
+else
+    echo "️ No 'tests' directory found — skipping unit tests and coverage"
+fi
+
+echo "Storing Reports"
+cp -r "$REPORT_DIR"/* "$ARTIFACT_DIR/"
+
+deactivate
