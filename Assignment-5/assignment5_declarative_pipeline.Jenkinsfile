@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         SLACK_CHANNEL = '#test'
-        EMAIL_RECIPIENTS = 'hifza6907@gmail.com'
+        EMAIL_RECIPIENTS = 'avimishra478@gmail.com'
     }
 
     parameters {
